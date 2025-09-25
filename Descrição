@@ -1,0 +1,43 @@
+🧠 Recurso de Inteligência para Análise de Chamados no Jira
+🎯 Objetivo
+Desenvolver um sistema que utilize IA para analisar chamados de clientes registrados no Jira, com foco em:
+- Identificar padrões de recorrência
+- Categorizar motivadores de abertura
+- Gerar insights para priorização de melhorias
+- Dar visibilidade sobre produtos/clientes críticos
+- Sugerir soluções
+- Analisar economia de tempo ao utilizar IA para fazer este processo (somar as horas gastas nos chamados já atendidos.
+🔍 Funcionalidades Principais
+1. Classificação Inteligente de Chamados
+Utilizar NLP (Processamento de Linguagem Natural) para analisar títulos e descrições dos chamados
+Agrupar chamados por similaridade semântica (ex: problemas de login, lentidão, erros de integração)
+Identificar palavras-chave e sentimentos (ex: urgência, frustração)
+2. Detecção de Padrões de Recorrência
+Mapear frequência de chamados por categoria, produto, cliente e período
+Detectar picos anormais ou tendências crescentes
+Gerar alertas automáticos para áreas com aumento de chamados
+3. Análise de Causa-Raiz
+Correlacionar chamados com versões de produto, mudanças recentes ou incidentes
+Sugerir possíveis causas com base em histórico e similaridade com casos anteriores
+4. Dashboard de Priorizações
+Visualizar quais produtos ou clientes têm maior volume ou criticidade
+Classificar chamados por impacto e urgência
+Gerar recomendações de ações (ex: revisão de documentação, correção de bugs, treinamento)
+5. Sugestões de Solução para o Problema
+Automatização do Atendimento Inicial: Implementar uma triagem automatizada com IA que, a partir do conteúdo do chamado, sugira soluções imediatas ou direcione para o departamento adequado, reduzindo o tempo de espera e aumentando a eficiência do suporte.
+Feedback e Melhoria Contínua: Criar um sistema que permita coletar feedback dos usuários sobre a eficácia das soluções propostas, utilizando essas informações para treinar continuamente o modelo de IA e aprimorar a precisão da classificação e análise dos chamados.
+6. Ganhos Esperados com a Resolução pela IA
+Aumento de Produtividade: Espera-se um aumento de até 50% na produtividade da equipe de suporte, permitindo que os analistas se concentrem em casos mais complexos.
+Redução no Tempo de Resolução: A resolução de chamados pode ser acelerada em até 40%, levando a uma melhora significativa na satisfação do cliente.
+🛠️ Tecnologias Sugeridas
+Componente	Sugestão
+Plataforma de IA	Azure OpenAI, Hugging Face Transformers
+Integração com Jira	API REST do Jira
+Armazenamento	Azure SQL, PostgreSQL
+Visualização	Power BI, Grafana ou dashboards customizados
+Backend	Python (FastAPI ou Flask)
+📈 Benefícios Esperados
+Redução no tempo de análise dos chamados
+Priorização mais assertiva de melhorias
+Aumento da satisfação dos clientes
+Visibilidade clara para áreas de produto e atendimento
