@@ -5,11 +5,13 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 
 from presentation.summary_router import router as summary_router
+from presentation.health_router import router as health_router
 
 load_dotenv()
 
 app = FastAPI(title="HackathonIA API", version="1.0.0")
 app.include_router(summary_router, prefix="/api")
+app.include_router(health_router, prefix="/api")
 
 
 if __name__ == "__main__":

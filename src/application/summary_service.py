@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, List, Sequence
+from typing import Iterable, List, Sequence, Optional, Protocol, Dict, Any
 
 import chromadb
 
 from domain.models import ClusterSummary
+
+
+class JiraRepository(Protocol):
+    def get_rows_by_ids(self, ids: Iterable[str]) -> List[Dict[str, Any]]: ...
 
 
 @dataclass(frozen=True)
@@ -16,13 +20,24 @@ class SummaryServiceSettings:
     min_cluster_size: int = 3
     max_neighbors: int = 200
     max_clusters: int = 20
+    create_if_missing: bool = False
 
 
 class SummaryReportService:
-    def __init__(self, settings: SummaryServiceSettings) -> None:
+    def __init__(self, settings: SummaryServiceSettings, jira_repo: Optional[JiraRepository] = None) -> None:
         self._settings = settings
         self._client = chromadb.PersistentClient(path=settings.chroma_path)
-        self._collection = self._client.get_collection(name=settings.collection_name)
+        # Por padrão, não cria coleção automaticamente (evita a impressão de que a base foi "recriada")
+        if settings.create_if_missing:
+            self._collection = self._client.get_or_create_collection(name=settings.collection_name)
+        else:
+            try:
+                self._collection = self._client.get_collection(name=settings.collection_name)
+            except Exception as exc:
+                raise RuntimeError(
+                    "Coleção Chroma não encontrada. Configure CHROMA_DB_PATH/CHROMA_COLLECTION_NAME para apontar para uma base existente"
+                ) from exc
+        self._jira_repo = jira_repo
 
     def generate_cluster_report(self) -> List[ClusterSummary]:
         all_items = self._collection.get(include=["embeddings", "metadatas"])
@@ -68,7 +83,30 @@ class SummaryReportService:
         for index, cluster_ids in enumerate(clusters[: self._settings.max_clusters], start=1):
             metadatas = self._collection.get(ids=cluster_ids, include=["metadatas"]).get("metadatas", [])
             representative_summary = self._extract_summary(metadatas)
-            sample_summaries = self._extract_sample_summaries(metadatas, limit=3, skip=representative_summary)
+
+            # Enriquecer com CSV se disponível
+            csv_summaries: List[str] = []
+            if self._jira_repo is not None:
+                try:
+                    rows = self._jira_repo.get_rows_by_ids(cluster_ids)
+                    csv_summaries = self._extract_summaries_from_rows(rows, limit=5)
+                except Exception:
+                    # Não impede a geração do relatório; segue apenas com metadados
+                    csv_summaries = []
+
+            # Se o resumo representativo não veio dos metadados, tenta cair para o CSV
+            if (not representative_summary) or representative_summary == "Nome não encontrado":
+                if csv_summaries:
+                    representative_summary = csv_summaries[0]
+
+            sample_from_meta = self._extract_sample_summaries(
+                metadatas, limit=3, skip=representative_summary
+            )
+            # Complementa com exemplos do CSV (evitando duplicatas)
+            sample_from_csv = [
+                s for s in csv_summaries if s and s.strip() and s.strip() != representative_summary
+            ]
+            sample_summaries = (sample_from_meta + sample_from_csv)[:3]
 
             report_entries.append(
                 ClusterSummary(
@@ -109,3 +147,17 @@ class SummaryReportService:
                 break
 
         return summaries
+
+    @staticmethod
+    def _extract_summaries_from_rows(rows: Iterable[Dict[str, Any]], limit: int) -> List[str]:
+        keys = ("Resumo", "resumo", "summary", "Summary", "Descrição", "descricao")
+        out: List[str] = []
+        for row in rows:
+            for key in keys:
+                value = row.get(key)
+                if isinstance(value, str) and value.strip():
+                    out.append(value.strip())
+                    break
+            if len(out) >= limit:
+                break
+        return out
