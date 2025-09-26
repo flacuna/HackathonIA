@@ -1,0 +1,7 @@
+.env
+lab
+*.pyc
+__pycache__
+*.pyo
+*.pyd
+*.bin

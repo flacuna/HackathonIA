@@ -1,7 +1,16 @@
+from __future__ import annotations
+
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI
 
-app = FastAPI()
+from presentation.summary_router import router as summary_router
+
+load_dotenv()
+
+app = FastAPI(title="HackathonIA API", version="1.0.0")
+app.include_router(summary_router, prefix="/api")
+
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
