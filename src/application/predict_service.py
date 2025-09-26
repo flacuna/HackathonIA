@@ -299,14 +299,14 @@ def generate_forecast_pdf(horizon_days: int = 7) -> bytes:
     story.append(img1)
     story.append(Spacer(1, 18))
 
+    story.append(Paragraph("Zoom: últimos 10 dias + previsão", styles["Heading2"]))
+    story.append(Spacer(1, 6))
+    story.append(img3)
+
     story.append(Paragraph("Componentes (tendência e semanal)", styles["Heading2"]))
     story.append(Spacer(1, 6))
     story.append(img2)
     story.append(Spacer(1, 18))
-
-    story.append(Paragraph("Zoom: últimos 10 dias + previsão", styles["Heading2"]))
-    story.append(Spacer(1, 6))
-    story.append(img3)
 
     doc.build(story)
     pdf = buf.getvalue()
