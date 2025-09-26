@@ -10,6 +10,7 @@ from domain.models import ClusterSummary
 
 class JiraRepository(Protocol):
     def get_rows_by_ids(self, ids: Iterable[str]) -> List[Dict[str, Any]]: ...
+    def filter_ids_by_date(self, ids: Iterable[str], date_range: tuple[str, str]) -> List[str]: ...
 
 
 @dataclass(frozen=True)
@@ -39,8 +40,8 @@ class SummaryReportService:
                 ) from exc
         self._jira_repo = jira_repo
 
-    def generate_cluster_report(self) -> List[ClusterSummary]:
-        all_items = self._collection.get(include=["embeddings", "metadatas"])
+    def generate_cluster_report(self, data_inicio: Optional[str] = None, data_fim: Optional[str] = None) -> List[ClusterSummary]:
+        all_items = self._collection.get(include=["embeddings", "metadatas"])  # ids vem por padrão
         all_ids: Sequence[str] = all_items.get("ids", [])
 
         if not all_ids:
@@ -48,6 +49,16 @@ class SummaryReportService:
 
         embeddings = all_items.get("embeddings", [])
         embeddings_map = {item_id: embedding for item_id, embedding in zip(all_ids, embeddings)}
+
+        # Se data_inicio e data_fim forem fornecidas e tivermos repositório CSV,
+        # filtramos IDs fora da janela ANTES do clustering
+        if data_inicio and data_fim and self._jira_repo is not None:
+            try:
+                filtered_ids = set(self._jira_repo.filter_ids_by_date(all_ids, (data_inicio, data_fim)))
+                all_ids = [i for i in all_ids if i in filtered_ids]
+            except Exception:
+                # Se o filtro falhar por motivo do CSV, segue sem filtrar
+                pass
 
         clusters: List[List[str]] = []
         unclustered_ids = set(all_ids)
@@ -88,7 +99,8 @@ class SummaryReportService:
             csv_summaries: List[str] = []
             if self._jira_repo is not None:
                 try:
-                    rows = self._jira_repo.get_rows_by_ids(cluster_ids)
+                    date_range = (data_inicio, data_fim) if data_inicio and data_fim else None
+                    rows = self._jira_repo.get_rows_by_ids(cluster_ids, date_range=date_range)
                     csv_summaries = self._extract_summaries_from_rows(rows, limit=5)
                 except Exception:
                     # Não impede a geração do relatório; segue apenas com metadados
