@@ -24,6 +24,7 @@ import matplotlib
 matplotlib.use("Agg")  # backend não-interativo para servidores
 import matplotlib.pyplot as plt
 import seaborn as sns
+import matplotlib.patheffects as pe
 
 
 def build_summary_report_pdf(
@@ -43,6 +44,48 @@ def build_summary_report_pdf(
 
     entries: List[ClusterSummary] = list(report_entries)
     user_counts: List[tuple[str, int]] = list(user_open_counts or [])
+
+    def _annotate_horizontal_bars(ax, labels: List[str], values: List[float]) -> None:
+        """Escreve o nome dos grupos dentro da barra; se não couber, escreve ao lado.
+
+        Regra simples: se o valor do item >= 60% do valor máximo, escreve dentro (alinhado à direita, cor branca),
+        caso contrário escreve à direita da barra (alinhado à esquerda, cor preta).
+        """
+        if not values:
+            return
+        maxv = max(values) if max(values) > 0 else 1.0
+        patches = ax.patches
+        def _ellipsize(text: str, max_chars: int = 90) -> str:
+            text = text or ""
+            return text if len(text) <= max_chars else (text[: max_chars - 1] + "…")
+        for patch, label, val in zip(patches, labels, values):
+            x = patch.get_width()
+            y = patch.get_y() + patch.get_height() / 2
+            inside = val >= 0.6 * maxv
+            label_draw = _ellipsize(label)
+            text_effects = [pe.withStroke(linewidth=2, foreground="white")]
+            if inside:
+                ax.text(
+                    x - 0.02 * maxv,
+                    y,
+                    label_draw,
+                    va="center",
+                    ha="right",
+                    color="black",
+                    fontsize=8,
+                    path_effects=text_effects,
+                )
+            else:
+                ax.text(
+                    x + 0.02 * maxv,
+                    y,
+                    label_draw,
+                    va="center",
+                    ha="left",
+                    color="black",
+                    fontsize=8,
+                    path_effects=text_effects,
+                )
 
     if not entries:
         story.append(Paragraph("Nenhum cluster foi encontrado com os parâmetros atuais.", italic_style))
@@ -89,6 +132,7 @@ def build_summary_report_pdf(
             ax.set_title("Top Grupos por Ocorrências")
             ax.set_xlabel("Ocorrências")
             ax.set_ylabel("Grupo")
+            _annotate_horizontal_bars(ax, [e.representative_summary for e in top], [float(e.occurrences) for e in top])
             plt.tight_layout()
 
             img_buf = BytesIO()
@@ -134,6 +178,7 @@ def build_summary_report_pdf(
                 ax3.set_title("Top Grupos por Horas Gastas")
                 ax3.set_xlabel("Horas (soma Criado → Resolvido)")
                 ax3.set_ylabel("Grupo")
+                _annotate_horizontal_bars(ax3, [e.representative_summary for e in top_hours], [float(e.total_hours) for e in top_hours])
                 plt.tight_layout()
 
                 img_buf3 = BytesIO()
@@ -168,6 +213,7 @@ def build_summary_report_pdf(
                 ax4.set_title("Média de Horas por Grupo")
                 ax4.set_xlabel("Média de horas por chamado")
                 ax4.set_ylabel("Grupo")
+                _annotate_horizontal_bars(ax4, [e.representative_summary for e in top_avg], [float(_avg(e)) for e in top_avg])
                 plt.tight_layout()
 
                 img_buf4 = BytesIO()
