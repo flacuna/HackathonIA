@@ -205,7 +205,7 @@ def build_summary_report_pdf(
         # Horas totais após o resumo de grupos
         try:
             total_hours_all = sum(e.total_hours for e in entries)
-            story.append(Paragraph("Tempo total de chamados com o Mesmo Tipo", subtitle_style))
+            story.append(Paragraph("Tempo total de chamados com o Mesmo Tipo em aberto", subtitle_style))
             story.append(Spacer(1, 6))
             story.append(Paragraph(
                 f"Quantificar o tempo total em aberto deste mesmo tipo (janela selecionada): {total_hours_all:,.2f} horas",
