@@ -41,3 +41,11 @@ Redução no tempo de análise dos chamados
 Priorização mais assertiva de melhorias
 Aumento da satisfação dos clientes
 Visibilidade clara para áreas de produto e atendimento
+
+🚀 Interface de API
+Um serviço FastAPI expõe o endpoint `/api/summary`, responsável por consultar o banco vetorial (ChromaDB) e gerar um relatório em PDF com os principais grupos de chamados identificados.
+
+Como executar localmente:
+1. Instale as dependências com `pip install -r requirements.txt`.
+2. Execute `uvicorn app:app --reload` a partir da pasta `src`.
+3. Acesse `http://localhost:8000/api/summary` para baixar o relatório atualizado.

@@ -1,0 +1,23 @@
+.env
+lab
+*.pyc
+__pycache__
+*.pyo
+*.pyd
+*.bin
+*.log
+.DS_Store
+.venv/
+venv/
+env/
+
+# Editor/OS
+.vscode/
+.idea/
+
+# Data & vector stores (prefer apontar via envs)
+src/data/chroma_db/
+src/chroma_db/
+lab/chroma_db/
+# CSVs grandes (opcional, remova se quiser versionar)
+src/data/*.csv
