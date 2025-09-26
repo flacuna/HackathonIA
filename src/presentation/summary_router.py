@@ -34,10 +34,18 @@ async def get_summary_report(
         report_entries, user_open_counts, daily_open_counts = service.generate_cluster_report(
             data_inicio=data_inicio, data_fim=data_fim
         )
+        ai_overview = service.generate_structured_overview(
+            report_entries=report_entries,
+            user_open_counts=user_open_counts,
+            daily_open_counts=daily_open_counts,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+        )
         pdf_bytes = build_summary_report_pdf(
             report_entries,
             user_open_counts=user_open_counts,
             daily_open_counts=daily_open_counts,
+            ai_overview=ai_overview,
         )
     except Exception as exc:  # noqa: BLE001 - queremos registrar qualquer falha inesperada
         logger.exception("Falha ao gerar o relatório de resumo", exc_info=exc)

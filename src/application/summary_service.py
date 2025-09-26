@@ -6,11 +6,11 @@ from collections import Counter
 
 import chromadb
 
-from domain.models import ClusterSummary
+from domain.models import ClusterSummary, AIStructuredOverview
 
 
 class JiraRepository(Protocol):
-    def get_rows_by_ids(self, ids: Iterable[str]) -> List[Dict[str, Any]]: ...
+    def get_rows_by_ids(self, ids: Iterable[str], date_range: Optional[tuple[str, str]] = None) -> List[Dict[str, Any]]: ...
     def filter_ids_by_date(self, ids: Iterable[str], date_range: tuple[str, str]) -> List[str]: ...
 
 
@@ -26,7 +26,12 @@ class SummaryServiceSettings:
 
 
 class SummaryReportService:
-    def __init__(self, settings: SummaryServiceSettings, jira_repo: Optional[JiraRepository] = None) -> None:
+    def __init__(
+        self,
+        settings: SummaryServiceSettings,
+        jira_repo: Optional[JiraRepository] = None,
+        bedrock_client: Any | None = None,
+    ) -> None:
         self._settings = settings
         self._client = chromadb.PersistentClient(path=settings.chroma_path)
         # Por padrão, não cria coleção automaticamente (evita a impressão de que a base foi "recriada")
@@ -40,6 +45,7 @@ class SummaryReportService:
                     "Coleção Chroma não encontrada. Configure CHROMA_DB_PATH/CHROMA_COLLECTION_NAME para apontar para uma base existente"
                 ) from exc
         self._jira_repo = jira_repo
+        self._bedrock = bedrock_client
 
     def generate_cluster_report(
         self, data_inicio: Optional[str] = None, data_fim: Optional[str] = None
@@ -173,6 +179,35 @@ class SummaryReportService:
             )
 
         return report_entries, user_open_counts, daily_open_counts
+
+    def generate_structured_overview(
+        self,
+        report_entries: List[ClusterSummary],
+        user_open_counts: List[Tuple[str, int]] | None,
+        daily_open_counts: List[Tuple[str, int]] | None,
+        data_inicio: Optional[str],
+        data_fim: Optional[str],
+    ) -> Optional[AIStructuredOverview]:
+        """Chama o cliente Bedrock/Anthropic para produzir um resumo estruturado em PT-BR.
+
+        Retorna None se o cliente não estiver configurado (para permitir funcionamento offline).
+        """
+        if not self._bedrock:
+            return None
+        try:
+            data = self._bedrock.generate_structured_overview_pt(
+                report_entries=report_entries,
+                user_open_counts=user_open_counts,
+                daily_open_counts=daily_open_counts,
+                data_inicio=data_inicio,
+                data_fim=data_fim,
+            )
+            periodo = str(data.get("periodo", ""))
+            resumo_geral = str(data.get("resumo_geral", ""))
+            sugestoes = [str(s) for s in (data.get("sugestoes") or []) if isinstance(s, str)]
+            return AIStructuredOverview(periodo=periodo, resumo_geral=resumo_geral, sugestoes=sugestoes)
+        except Exception:
+            return None
 
     @staticmethod
     def _extract_summary(metadatas: Iterable[dict]) -> str:

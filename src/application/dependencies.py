@@ -6,6 +6,7 @@ from pathlib import Path
 
 from application.summary_service import SummaryReportService, SummaryServiceSettings
 from infraestructure.jira_repository import JiraCsvRepository
+from infraestructure.llm_bedrock import BedrockAnthropicClient
 
 
 def _parse_float(value: str, default: float) -> float:
@@ -43,7 +44,13 @@ def get_summary_service() -> SummaryReportService:
     settings = get_summary_settings()
     # Repositório CSV padrão aponta a src/data/JIRA_limpo.csv (sobrescrevível por JIRA_CSV_PATH)
     jira_repo = JiraCsvRepository()
-    return SummaryReportService(settings, jira_repo=jira_repo)
+    # Cliente Bedrock/Anthropic opcional. Se não houver credenciais/região, seguirá sem IA.
+    bedrock = None
+    try:
+        bedrock = BedrockAnthropicClient()
+    except Exception:
+        bedrock = None
+    return SummaryReportService(settings, jira_repo=jira_repo, bedrock_client=bedrock)
 
 
 def get_summary_service_dependency() -> SummaryReportService:

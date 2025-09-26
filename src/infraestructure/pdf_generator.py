@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -17,7 +17,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from domain.models import ClusterSummary
+from domain.models import ClusterSummary, AIStructuredOverview
 
 # plotting
 import matplotlib
@@ -32,6 +32,7 @@ def build_summary_report_pdf(
     report_entries: Iterable[ClusterSummary],
     user_open_counts: Iterable[tuple[str, int]] | None = None,
     daily_open_counts: Iterable[tuple[str, int]] | None = None,
+    ai_overview: Optional[AIStructuredOverview] = None,
 ) -> bytes:
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
@@ -43,6 +44,30 @@ def build_summary_report_pdf(
     italic_style = ParagraphStyle(name="Italic", parent=normal_style, fontName="Helvetica-Oblique")
 
     story = [Paragraph("Relatório de Recorrência de Chamados", title_style), Spacer(1, 16)]
+
+    # Se houver resumo executivo via IA, coloca no topo
+    if ai_overview is not None:
+        try:
+            story.append(Paragraph("Resumo Executivo (IA)", subtitle_style))
+            if ai_overview.periodo:
+                story.append(Paragraph(f"Período: {ai_overview.periodo}", italic_style))
+            if ai_overview.resumo_geral:
+                story.append(Spacer(1, 6))
+                story.append(Paragraph(ai_overview.resumo_geral, normal_style))
+            if ai_overview.sugestoes:
+                story.append(Spacer(1, 8))
+                story.append(Paragraph("Sugestões de mitigação/prevenção:", styles["Heading3"]))
+                story.append(
+                    ListFlowable(
+                        [ListItem(Paragraph(s, normal_style), leftIndent=12) for s in ai_overview.sugestoes],
+                        bulletType="bullet",
+                        leftIndent=0,
+                    )
+                )
+            story.append(Spacer(1, 16))
+        except Exception:
+            # Se der algum erro, ignora a seção de IA
+            pass
 
     entries: List[ClusterSummary] = list(report_entries)
     user_counts: List[tuple[str, int]] = list(user_open_counts or [])
