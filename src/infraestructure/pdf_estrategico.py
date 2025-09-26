@@ -307,17 +307,3 @@ def build_relatorio_estrategico_pdf(caminho_csv: str) -> bytes:
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
-
-
-if __name__ == "__main__":
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    arquivo_csv = os.path.join(script_dir, "..", "data", "JIRA_limpo.csv")
-    
-    conteudo_relatorio = build_relatorio_estrategico_pdf(arquivo_csv)
-    
-    # Guardar el PDF en el directorio raíz del proyecto
-    pdf_path = os.path.join(script_dir, "..", "..", "relatorio_estrategico.pdf")
-    with open(pdf_path, "wb") as f:
-        f.write(conteudo_relatorio)
-    
-    print(f"Relatório estratégico gerado: {pdf_path}")
