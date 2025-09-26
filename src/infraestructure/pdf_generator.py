@@ -26,7 +26,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def build_summary_report_pdf(report_entries: Iterable[ClusterSummary]) -> bytes:
+def build_summary_report_pdf(
+    report_entries: Iterable[ClusterSummary],
+    user_open_counts: Iterable[tuple[str, int]] | None = None,
+) -> bytes:
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
     styles = getSampleStyleSheet()
@@ -39,22 +42,11 @@ def build_summary_report_pdf(report_entries: Iterable[ClusterSummary]) -> bytes:
     story = [Paragraph("Relatório de Recorrência de Chamados", title_style), Spacer(1, 16)]
 
     entries: List[ClusterSummary] = list(report_entries)
+    user_counts: List[tuple[str, int]] = list(user_open_counts or [])
 
     if not entries:
         story.append(Paragraph("Nenhum cluster foi encontrado com os parâmetros atuais.", italic_style))
     else:
-        # Métrica agregada: horas gastas com o mesmo tipo (top clusters)
-        try:
-            total_hours_all = sum(e.total_hours for e in entries)
-            story.append(Paragraph("Horas Gastas com o Mesmo Tipo", subtitle_style))
-            story.append(Paragraph(
-                f"Quantificar as horas gastas com este mesmo tipo (janela selecionada): {total_hours_all:,.2f} horas",
-                normal_style,
-            ))
-            story.append(Spacer(1, 12))
-        except Exception:
-            pass
-
         story.append(Paragraph("Resumo dos principais grupos identificados", subtitle_style))
         story.append(Spacer(1, 12))
 
@@ -115,6 +107,20 @@ def build_summary_report_pdf(report_entries: Iterable[ClusterSummary]) -> bytes:
         # ==========================
         # Gráfico: Horas gastas (top clusters com horas)
         # ==========================
+
+        # Horas totais após o resumo de grupos
+        try:
+            total_hours_all = sum(e.total_hours for e in entries)
+            story.append(Paragraph("Horas Gastas com o Mesmo Tipo", subtitle_style))
+            story.append(Spacer(1, 6))
+            story.append(Paragraph(
+                f"Quantificar as horas gastas com este mesmo tipo (janela selecionada): {total_hours_all:,.2f} horas",
+                normal_style,
+            ))
+            story.append(Spacer(1, 12))
+        except Exception:
+            pass
+
         try:
             top_hours = sorted(entries, key=lambda e: e.total_hours, reverse=True)[:10]
             if any(e.total_hours > 0 for e in top_hours):
@@ -175,6 +181,42 @@ def build_summary_report_pdf(report_entries: Iterable[ClusterSummary]) -> bytes:
                 story.append(Spacer(1, 18))
         except Exception:
             pass
+
+        # Após as visualizações por grupo, inserir métrica de usuários
+        if user_counts:
+            try:
+                story.append(Paragraph("Chamados Abertos por Usuário (Top)", subtitle_style))
+                story.append(Spacer(1, 8))
+                top_users = user_counts[:10]
+
+                table_user = Table([["Usuário", "Chamados"]] + [[u, str(c)] for u, c in top_users], colWidths=[300, 90])
+                table_user.setStyle(
+                    TableStyle([
+                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2F4F4F")),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
+                        ("BOX", (0, 0), (-1, -1), 0.25, colors.lightgrey),
+                        ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
+                    ])
+                )
+                story.extend([table_user, Spacer(1, 14)])
+
+                figu, axu = plt.subplots(figsize=(7.5, 3.5))
+                sns.barplot(x=[c for _, c in top_users], y=[u for u, _ in top_users], palette="Purples", ax=axu)
+                axu.set_title("Top Usuários por Chamados Abertos")
+                axu.set_xlabel("Chamados")
+                axu.set_ylabel("Usuário")
+                plt.tight_layout()
+                bufu = BytesIO()
+                figu.savefig(bufu, format="png", dpi=150, bbox_inches="tight")
+                plt.close(figu)
+                bufu.seek(0)
+                story.append(Image(bufu, width=480, height=220))
+                story.append(Spacer(1, 18))
+            except Exception:
+                pass
 
         # (Removido) Distribuição de tamanhos dos clusters — mantemos apenas a visualização mais acionável
 
