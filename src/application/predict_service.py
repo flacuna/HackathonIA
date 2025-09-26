@@ -55,7 +55,7 @@ def _seasonal_weekly_forecast(
     history: pd.DataFrame,
     horizon_days: int = 7,
     ci_level: float = 0.8,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     """Gera previsão simples (ingênua) combinando tendência (MM7) + sazonalidade semanal.
 
     Retorna duas partes:
@@ -95,6 +95,21 @@ def _seasonal_weekly_forecast(
         "yhat_upper": hist["yhat_in"] + z * resid_std,
     })
 
+    # Métricas de ajuste in-sample
+    try:
+        rmse = float(np.sqrt(np.mean((resid.values) ** 2)))
+    except Exception:
+        rmse = float("nan")
+    try:
+        valid = hist["y"] != 0
+        if valid.any():
+            mape = float((np.abs((hist.loc[valid, "y"] - hist.loc[valid, "yhat_in"]) / hist.loc[valid, "y"]).mean()) * 100.0)
+        else:
+            mape = float("nan")
+    except Exception:
+        mape = float("nan")
+    metrics = {"rmse": rmse, "mape": mape}
+
     last_date = hist["ds"].max()
     future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=horizon_days, freq="D")
     # Para a tendência futura, mantemos a última tendência observada (walk-forward simples)
@@ -113,7 +128,7 @@ def _seasonal_weekly_forecast(
         })
 
     future = pd.DataFrame(rows)
-    return fit_hist, future
+    return fit_hist, future, metrics
 
 
 def _fig_to_image(fig: plt.Figure, width: float = 500) -> Image:
@@ -231,7 +246,7 @@ def generate_forecast_pdf(horizon_days: int = 7) -> bytes:
     - Monta relatório em PDF com 3 gráficos principais
     """
     history = _load_daily_counts()
-    fit_hist, future = _seasonal_weekly_forecast(history, horizon_days=horizon_days, ci_level=0.8)
+    fit_hist, future, metrics = _seasonal_weekly_forecast(history, horizon_days=horizon_days, ci_level=0.8)
     img1, img2, img3 = _build_forecast_plots(history, fit_hist, future)
 
     buf = BytesIO()
@@ -246,6 +261,38 @@ def generate_forecast_pdf(horizon_days: int = 7) -> bytes:
     story.append(Paragraph(f"Histórico considerado: {start_date} até {end_date}", styles["Normal"]))
     story.append(Paragraph(f"Horizonte da previsão: {horizon_days} dias", styles["Normal"]))
     story.append(Spacer(1, 18))
+
+    # Métricas de qualidade do ajuste in-sample (explicativas)
+    def _fmt_pt(val: float, decimals: int = 2, suffix: str = "") -> str:
+        try:
+            if val is None or (isinstance(val, float) and pd.isna(val)):
+                return "N/A"
+            s = f"{val:.{decimals}f}".replace(".", ",")
+            return s + suffix
+        except Exception:
+            return "N/A"
+
+    mape_val = metrics.get("mape")
+    rmse_val = metrics.get("rmse")
+    mape_txt = _fmt_pt(mape_val, 2, "%")
+    rmse_txt = _fmt_pt(rmse_val, 2)
+
+    story.append(Paragraph("Qualidade do ajuste (in-sample)", styles["Heading2"]))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(
+        f"MAPE de <b>{mape_txt}</b> (Erro Absoluto Percentual Médio): mede o erro relativo médio entre a previsão ajustada e os valores observados. "
+        f"Interpretação: um MAPE de <b>{mape_txt}</b> indica que, em média, a previsão difere {mape_txt} do valor real. "
+        "Quanto menor, melhor. Observação: o MAPE pode ficar instável quando há valores reais muito próximos de zero.",
+        styles["Normal"],
+    ))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        f"RMSE de <b>{rmse_txt}</b> (Raiz do Erro Quadrático Médio): mede o erro médio em unidades de 'chamados', penalizando mais desvios grandes. "
+        f"Interpretação: um RMSE de <b>{rmse_txt}</b> significa que, em média, o desvio da previsão para o valor real é {rmse_txt} chamados. "
+        "Quanto menor, melhor.",
+        styles["Normal"],
+    ))
+    story.append(Spacer(1, 12))
 
     story.append(Paragraph("Histórico + Previsão", styles["Heading2"]))
     story.append(Spacer(1, 6))
