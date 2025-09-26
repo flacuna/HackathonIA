@@ -54,7 +54,7 @@ def build_summary_report_pdf(
     normal_style = styles["BodyText"]
     italic_style = ParagraphStyle(name="Italic", parent=normal_style, fontName="Helvetica-Oblique")
 
-    story = [Paragraph("Relatório de Recorrência de Chamados", title_style), Spacer(1, 16)]
+    story = [Paragraph("Relatório de Recorrência de Chamados (Operacional)", title_style), Spacer(1, 16)]
 
     # Se houver resumo executivo via IA, coloca no topo
     if ai_overview is not None:
@@ -278,11 +278,32 @@ def build_summary_report_pdf(
     if user_counts:
         try:
             top_users = user_counts[:10]
+            users = [u for u, _ in top_users]
+            counts = [c for _, c in top_users]
             figu, axu = plt.subplots(figsize=(7.5, 3.5))
-            sns.barplot(x=[c for _, c in top_users], y=[u for u, _ in top_users], palette="Purples", ax=axu)
-            axu.set_title("Top Usuários por Chamados Abertos")
+            sns.barplot(x=counts, y=users, palette="Purples", ax=axu)
+            axu.set_title("Top Usuários por Chamados")
             axu.set_xlabel("Chamados")
-            axu.set_ylabel("Usuário")
+            axu.set_ylabel("")
+            # Remover rótulos verticais (nomes no eixo Y)
+            axu.set_yticklabels([])
+            maxv = max(counts) if counts else 1
+            # Dar espaço à direita para os nomes se estenderem além da barra
+            axu.set_xlim(0, maxv * 1.35)
+            pad = max(0.5, 0.02 * maxv)
+            for patch, label, val in zip(axu.patches, users, counts):
+                x = patch.get_x() + pad  # começa dentro da barra, à esquerda
+                y = patch.get_y() + patch.get_height() / 2
+                axu.text(
+                    x,
+                    y,
+                    label,
+                    va="center",
+                    ha="left",
+                    color="black",
+                    fontsize=8,
+                    path_effects=[pe.withStroke(linewidth=2, foreground="white")],
+                )
             plt.tight_layout()
 
             imgu = _fig_to_rl_image(figu, target_width=col_width, max_height=240)
