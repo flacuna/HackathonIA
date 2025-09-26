@@ -1,14 +1,29 @@
 from __future__ import annotations
 
 from io import BytesIO
-from typing import Iterable
+from typing import Iterable, List
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.platypus import ListFlowable, ListItem, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    Image,
+    ListFlowable,
+    ListItem,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 from domain.models import ClusterSummary
+
+# plotting
+import matplotlib
+matplotlib.use("Agg")  # backend não-interativo para servidores
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 def build_summary_report_pdf(report_entries: Iterable[ClusterSummary]) -> bytes:
@@ -23,7 +38,7 @@ def build_summary_report_pdf(report_entries: Iterable[ClusterSummary]) -> bytes:
 
     story = [Paragraph("Relatório de Recorrência de Chamados", title_style), Spacer(1, 16)]
 
-    entries = list(report_entries)
+    entries: List[ClusterSummary] = list(report_entries)
 
     if not entries:
         story.append(Paragraph("Nenhum cluster foi encontrado com os parâmetros atuais.", italic_style))
@@ -54,6 +69,38 @@ def build_summary_report_pdf(report_entries: Iterable[ClusterSummary]) -> bytes:
         )
 
         story.extend([table, Spacer(1, 18)])
+
+        # ==========================
+        # Gráfico: Top grupos por ocorrências
+        # ==========================
+        try:
+            fig, ax = plt.subplots(figsize=(7.5, 4))  # largura próxima da página A4
+            top = entries[:10]
+            sns.barplot(
+                x=[e.occurrences for e in top],
+                y=[e.group_name for e in top],
+                palette="Blues_d",
+                ax=ax,
+            )
+            ax.set_title("Top Grupos por Ocorrências")
+            ax.set_xlabel("Ocorrências")
+            ax.set_ylabel("Grupo")
+            plt.tight_layout()
+
+            img_buf = BytesIO()
+            fig.savefig(img_buf, format="png", dpi=150, bbox_inches="tight")
+            plt.close(fig)
+            img_buf.seek(0)
+
+            story.append(Paragraph("Visualização: Top Grupos (Ocorrências)", styles["Heading3"]))
+            story.append(Spacer(1, 6))
+            story.append(Image(img_buf, width=480, height=256))
+            story.append(Spacer(1, 18))
+        except Exception:
+            # Se der qualquer erro no gráfico, seguimos apenas com a tabela
+            pass
+
+        # (Removido) Distribuição de tamanhos dos clusters — mantemos apenas a visualização mais acionável
 
         for entry in entries:
             story.append(Paragraph(entry.group_name, styles["Heading3"]))
