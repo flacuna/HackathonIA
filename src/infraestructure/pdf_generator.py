@@ -4,7 +4,7 @@ from io import BytesIO
 from typing import Iterable, List, Optional
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import (
     Image,
@@ -15,6 +15,8 @@ from reportlab.platypus import (
     Spacer,
     Table,
     TableStyle,
+    KeepTogether,
+    KeepInFrame,
 )
 
 from domain.models import ClusterSummary, AIStructuredOverview
@@ -36,7 +38,15 @@ def build_summary_report_pdf(
     ai_overview: Optional[AIStructuredOverview] = None,
 ) -> bytes:
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    # Layout em paisagem (horizontal) para estilo "dashboard" com mais largura útil
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        leftMargin=18,
+        rightMargin=18,
+        topMargin=18,
+        bottomMargin=18,
+    )
     styles = getSampleStyleSheet()
 
     title_style = styles["Title"]
@@ -73,6 +83,30 @@ def build_summary_report_pdf(
     entries: List[ClusterSummary] = list(report_entries)
     user_counts: List[tuple[str, int]] = list(user_open_counts or [])
     daily_counts: List[tuple[str, int]] = list(daily_open_counts or [])
+
+    # Larguras de coluna para layout 2-colunas do dashboard
+    col_gap = 12
+    col_width = (doc.width - col_gap) / 2.0
+
+    def _fig_to_rl_image(fig: plt.Figure, target_width: float, max_height: Optional[float] = None, dpi: int = 150) -> Image:
+        """Converte um matplotlib Figure em um Image do ReportLab com largura alvo, preservando o aspecto.
+
+        target_width e max_height estão em pontos (pt). 1in = 72pt.
+        """
+        w_in, h_in = fig.get_size_inches()
+        aspect = h_in / w_in if w_in else 1.0
+        target_height = target_width * aspect
+        if max_height and target_height > max_height:
+            # Reduz proporcionalmente para não ultrapassar a altura máxima
+            scale = max_height / target_height
+            target_width *= scale
+            target_height = max_height
+        buf = BytesIO()
+        fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        img = Image(buf, width=target_width, height=target_height)
+        return img
 
     def _annotate_horizontal_bars(ax, labels: List[str], values: List[float]) -> None:
         """Escreve o nome dos grupos dentro da barra; se não couber, escreve ao lado.
@@ -119,32 +153,8 @@ def build_summary_report_pdf(
     if not entries:
         story.append(Paragraph("Nenhum cluster foi encontrado com os parâmetros atuais.", italic_style))
     else:
-        story.append(Paragraph("Resumo dos principais grupos identificados", subtitle_style))
-        story.append(Spacer(1, 12))
-
-        table_data = [["Grupo", "Chamado Representativo", "Ocorrências"]]
-        for entry in entries:
-            table_data.append([entry.group_name, entry.representative_summary, str(entry.occurrences)])
-
-        table = Table(table_data, colWidths=[70, 340, 80])
-        table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, 0), 11),
-                    ("BOTTOMPADDING", (0, 0), (-1, 0), 10),
-                    ("BACKGROUND", (0, 1), (-1, -1), colors.whitesmoke),
-                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
-                    ("BOX", (0, 0), (-1, -1), 0.25, colors.lightgrey),
-                    ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
-                ]
-            )
-        )
-
-        story.extend([table, Spacer(1, 18)])
+        # A tabela de grupos ficará após o dashboard; guardamos dados e seguimos
+        pass
 
     # Visão geral do período (total de chamados e horas), quando possível
     try:
@@ -167,11 +177,14 @@ def build_summary_report_pdf(
         pass
 
     # ==========================
-    # Gráfico: Top grupos por ocorrências
+    # Dashboard (2 colunas): gráficos lado a lado quando disponíveis
     # ==========================
+    dashboard_cells: List = []
+
+    # Gráfico: Top grupos por ocorrências
     if entries:
         try:
-            fig, ax = plt.subplots(figsize=(7.5, 4))  # largura próxima da página A4
+            fig, ax = plt.subplots(figsize=(7.5, 4))
             top = entries[:10]
             sns.barplot(
                 x=[e.occurrences for e in top],
@@ -185,24 +198,17 @@ def build_summary_report_pdf(
             _annotate_horizontal_bars(ax, [e.representative_summary for e in top], [float(e.occurrences) for e in top])
             plt.tight_layout()
 
-            img_buf = BytesIO()
-            fig.savefig(img_buf, format="png", dpi=150, bbox_inches="tight")
-            plt.close(fig)
-            img_buf.seek(0)
-
-            story.append(Paragraph("Visualização: Top Grupos (Ocorrências)", styles["Heading3"]))
-            story.append(Spacer(1, 6))
-            story.append(Image(img_buf, width=480, height=256))
-            story.append(Spacer(1, 18))
+            img = _fig_to_rl_image(fig, target_width=col_width, max_height=260)
+            cell = KeepInFrame(col_width, 280, [Paragraph("Top Grupos (Ocorrências)", styles["Heading3"]), Spacer(1, 4), img], mode="shrink")
+            dashboard_cells.append(cell)
         except Exception:
-            # Se der qualquer erro no gráfico, seguimos apenas com a tabela
             pass
 
     # ==========================
     # Gráfico: Horas gastas (top clusters com horas)
     # ==========================
     if entries:
-        # Horas totais após o resumo de grupos
+        # Indicador de horas totais (mantido em texto, acima da tabela detalhada)
         try:
             total_hours_all = sum(e.total_hours for e in entries)
             story.append(Paragraph("Tempo total de chamados com o Mesmo Tipo em aberto", subtitle_style))
@@ -232,15 +238,9 @@ def build_summary_report_pdf(
                 _annotate_horizontal_bars(ax3, [e.representative_summary for e in top_hours], [float(e.total_hours) for e in top_hours])
                 plt.tight_layout()
 
-                img_buf3 = BytesIO()
-                fig3.savefig(img_buf3, format="png", dpi=150, bbox_inches="tight")
-                plt.close(fig3)
-                img_buf3.seek(0)
-
-                story.append(Paragraph("Visualização: Top Grupos (Horas em Aberto)", styles["Heading3"]))
-                story.append(Spacer(1, 6))
-                story.append(Image(img_buf3, width=480, height=256))
-                story.append(Spacer(1, 18))
+                img3 = _fig_to_rl_image(fig3, target_width=col_width, max_height=260)
+                cell = KeepInFrame(col_width, 280, [Paragraph("Top Grupos (Horas em Aberto)", styles["Heading3"]), Spacer(1, 4), img3], mode="shrink")
+                dashboard_cells.append(cell)
         except Exception:
             pass
 
@@ -268,61 +268,60 @@ def build_summary_report_pdf(
                 _annotate_horizontal_bars(ax4, [e.representative_summary for e in top_avg], [float(_avg(e)) for e in top_avg])
                 plt.tight_layout()
 
-                img_buf4 = BytesIO()
-                fig4.savefig(img_buf4, format="png", dpi=150, bbox_inches="tight")
-                plt.close(fig4)
-                img_buf4.seek(0)
-
-                story.append(Paragraph("Visualização: Média de Horas por Grupo", styles["Heading3"]))
-                story.append(Spacer(1, 6))
-                story.append(Image(img_buf4, width=480, height=256))
-                story.append(Spacer(1, 18))
+                img4 = _fig_to_rl_image(fig4, target_width=col_width, max_height=260)
+                cell = KeepInFrame(col_width, 280, [Paragraph("Média de Horas por Grupo", styles["Heading3"]), Spacer(1, 4), img4], mode="shrink")
+                dashboard_cells.append(cell)
         except Exception:
             pass
 
     # Métrica de usuários (sempre que houver dados), independente de clusters
     if user_counts:
         try:
-            story.append(Paragraph("Chamados Abertos por Usuário (Top)", subtitle_style))
-            story.append(Spacer(1, 8))
             top_users = user_counts[:10]
-
-            table_user = Table([["Usuário", "Chamados"]] + [[u, str(c)] for u, c in top_users], colWidths=[300, 90])
-            table_user.setStyle(
-                TableStyle([
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2F4F4F")),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
-                    ("BOX", (0, 0), (-1, -1), 0.25, colors.lightgrey),
-                    ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
-                ])
-            )
-            story.extend([table_user, Spacer(1, 14)])
-
             figu, axu = plt.subplots(figsize=(7.5, 3.5))
             sns.barplot(x=[c for _, c in top_users], y=[u for u, _ in top_users], palette="Purples", ax=axu)
             axu.set_title("Top Usuários por Chamados Abertos")
             axu.set_xlabel("Chamados")
             axu.set_ylabel("Usuário")
             plt.tight_layout()
-            bufu = BytesIO()
-            figu.savefig(bufu, format="png", dpi=150, bbox_inches="tight")
-            plt.close(figu)
-            bufu.seek(0)
-            story.append(Image(bufu, width=480, height=220))
-            story.append(Spacer(1, 18))
+
+            imgu = _fig_to_rl_image(figu, target_width=col_width, max_height=240)
+            cell = KeepInFrame(col_width, 260, [Paragraph("Top Usuários por Chamados", styles["Heading3"]), Spacer(1, 4), imgu], mode="shrink")
+            dashboard_cells.append(cell)
         except Exception:
             pass
 
     # Série temporal: Chamados abertos por dia (linha) — sempre que houver dados
+    # Renderização do dashboard em tabela 2-colunas
+    if dashboard_cells:
+        story.append(Paragraph("Dashboard de Indicadores", subtitle_style))
+        story.append(Spacer(1, 8))
+        # Cria uma tabela por linha para permitir quebra entre as linhas do dashboard
+        for i in range(0, len(dashboard_cells), 2):
+            left_cell = dashboard_cells[i]
+            right_cell = dashboard_cells[i+1] if i+1 < len(dashboard_cells) else Spacer(1, 1)
+            dash_row = Table(
+                [[left_cell, right_cell]],
+                colWidths=[col_width, col_width],
+                style=TableStyle([
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                    ("TOPPADDING", (0, 0), (-1, -1), 2),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ])
+            )
+            story.append(dash_row)
+            story.append(Spacer(1, 10))
+        story.append(Spacer(1, 10))
+
+    # Série temporal (largura total)
     if daily_counts:
         try:
             days = [d for d, _ in daily_counts]
             vals = [v for _, v in daily_counts]
             xs = list(range(len(days)))
-            figd, axd = plt.subplots(figsize=(7.5, 3.0))
+            figd, axd = plt.subplots(figsize=(9.5, 3.2))
             axd.plot(xs, vals, marker="o", color="#1f77b4")
             axd.set_title("Chamados Abertos por Dia (Janela)")
             axd.set_xlabel("Data")
@@ -340,16 +339,45 @@ def build_summary_report_pdf(
             axd.set_xticks(tick_idx)
             axd.set_xticklabels([days[i] for i in tick_idx], rotation=45, ha="right")
             plt.tight_layout()
-            bufd = BytesIO()
-            figd.savefig(bufd, format="png", dpi=150, bbox_inches="tight")
-            plt.close(figd)
-            bufd.seek(0)
-            story.append(Image(bufd, width=480, height=200))
-            story.append(Spacer(1, 18))
+
+            imgd = _fig_to_rl_image(figd, target_width=doc.width, max_height=240)
+            story.append(Paragraph("Série Temporal de Aberturas", styles["Heading3"]))
+            story.append(Spacer(1, 6))
+            story.append(imgd)
+            story.append(Spacer(1, 16))
         except Exception:
             pass
 
         # (Removido) Distribuição de tamanhos dos clusters — mantemos apenas a visualização mais acionável
+
+    # Após o dashboard, apresentamos a tabela de grupos e detalhes
+    if entries:
+        story.append(Paragraph("Resumo dos principais grupos identificados", subtitle_style))
+        story.append(Spacer(1, 12))
+
+        table_data = [["Grupo", "Chamado Representativo", "Ocorrências"]]
+        for entry in entries:
+            table_data.append([entry.group_name, entry.representative_summary, str(entry.occurrences)])
+
+        # Ajuste das larguras para paisagem
+        table = Table(table_data, colWidths=[120, doc.width - 120 - 90, 90])
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, 0), 11),
+                    ("BOTTOMPADDING", (0, 0), (-1, 0), 10),
+                    ("BACKGROUND", (0, 1), (-1, -1), colors.whitesmoke),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
+                    ("BOX", (0, 0), (-1, -1), 0.25, colors.lightgrey),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
+                ]
+            )
+        )
+        story.extend([table, Spacer(1, 18)])
 
     for entry in entries:
         story.append(Paragraph(entry.group_name, styles["Heading3"]))
