@@ -49,12 +49,12 @@ class SummaryReportService:
 
     def generate_cluster_report(
         self, data_inicio: Optional[str] = None, data_fim: Optional[str] = None
-    ) -> Tuple[List[ClusterSummary], List[Tuple[str, int]], List[Tuple[str, int]]]:
+    ) -> Tuple[List[ClusterSummary], List[Tuple[str, int]], List[Tuple[str, int]], float]:
         all_items = self._collection.get(include=["embeddings", "metadatas"])  # ids vem por padrão
         all_ids: Sequence[str] = all_items.get("ids", [])
 
         if not all_ids:
-            return [], [], []
+            return [], [], [], 0.0
 
         embeddings = all_items.get("embeddings", [])
         embeddings_map = {item_id: embedding for item_id, embedding in zip(all_ids, embeddings)}
@@ -72,6 +72,7 @@ class SummaryReportService:
         # Estatística por usuário (Criador) respeitando a janela
         user_open_counts: List[Tuple[str, int]] = []
         daily_open_counts: List[Tuple[str, int]] = []
+        window_total_hours: float = 0.0
         if self._jira_repo is not None:
             try:
                 date_range = (data_inicio, data_fim) if data_inicio and data_fim else None
@@ -98,9 +99,16 @@ class SummaryReportService:
                     if isinstance(day, str) and day:
                         day_counter[day] += 1
                 daily_open_counts = sorted(day_counter.items(), key=lambda kv: kv[0])
+
+                # Soma de horas na janela (Criado -> Resolvido) em todas as linhas
+                try:
+                    window_total_hours = self._jira_repo.compute_total_hours(rows_all)
+                except Exception:
+                    window_total_hours = 0.0
             except Exception:
                 user_open_counts = []
                 daily_open_counts = []
+                window_total_hours = 0.0
 
         clusters: List[List[str]] = []
         unclustered_ids = set(all_ids)
@@ -178,7 +186,7 @@ class SummaryReportService:
                 )
             )
 
-        return report_entries, user_open_counts, daily_open_counts
+        return report_entries, user_open_counts, daily_open_counts, window_total_hours
 
     def generate_structured_overview(
         self,

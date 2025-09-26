@@ -32,6 +32,7 @@ def build_summary_report_pdf(
     report_entries: Iterable[ClusterSummary],
     user_open_counts: Iterable[tuple[str, int]] | None = None,
     daily_open_counts: Iterable[tuple[str, int]] | None = None,
+    window_total_hours: float | None = None,
     ai_overview: Optional[AIStructuredOverview] = None,
 ) -> bytes:
     buffer = BytesIO()
@@ -145,9 +146,30 @@ def build_summary_report_pdf(
 
         story.extend([table, Spacer(1, 18)])
 
+    # Visão geral do período (total de chamados e horas), quando possível
+    try:
+        total_tickets = None
+        if user_counts:
+            total_tickets = sum(c for _, c in user_counts)
+        elif daily_counts:
+            total_tickets = sum(c for _, c in daily_counts)
+        if total_tickets is not None:
+            story.append(Paragraph("Atividade no Período", subtitle_style))
+            story.append(Spacer(1, 6))
+            story.append(Paragraph(f"Total de chamados na janela selecionada: {total_tickets}", normal_style))
+            if isinstance(window_total_hours, (int, float)):
+                story.append(Paragraph(
+                    f"Horas totais (soma Criado → Resolvido) na janela: {window_total_hours:,.2f}",
+                    normal_style,
+                ))
+            story.append(Spacer(1, 12))
+    except Exception:
+        pass
+
     # ==========================
     # Gráfico: Top grupos por ocorrências
     # ==========================
+    if entries:
         try:
             fig, ax = plt.subplots(figsize=(7.5, 4))  # largura próxima da página A4
             top = entries[:10]
@@ -176,10 +198,10 @@ def build_summary_report_pdf(
             # Se der qualquer erro no gráfico, seguimos apenas com a tabela
             pass
 
-        # ==========================
-        # Gráfico: Horas gastas (top clusters com horas)
-        # ==========================
-
+    # ==========================
+    # Gráfico: Horas gastas (top clusters com horas)
+    # ==========================
+    if entries:
         # Horas totais após o resumo de grupos
         try:
             total_hours_all = sum(e.total_hours for e in entries)
@@ -193,6 +215,7 @@ def build_summary_report_pdf(
         except Exception:
             pass
 
+    if entries:
         try:
             top_hours = sorted(entries, key=lambda e: e.total_hours, reverse=True)[:10]
             if any(e.total_hours > 0 for e in top_hours):
@@ -221,9 +244,10 @@ def build_summary_report_pdf(
         except Exception:
             pass
 
-        # ==========================
-        # Gráfico: Média de horas por grupo (total_hours / ocorrências)
-        # ==========================
+    # ==========================
+    # Gráfico: Média de horas por grupo (total_hours / ocorrências)
+    # ==========================
+    if entries:
         try:
             # Evita divisão por zero; occurrences normalmente >= MIN_CLUSTER_SIZE
             def _avg(e: ClusterSummary) -> float:
@@ -256,99 +280,99 @@ def build_summary_report_pdf(
         except Exception:
             pass
 
-        # Após as visualizações por grupo, inserir métrica de usuários
-        if user_counts:
-            try:
-                story.append(Paragraph("Chamados Abertos por Usuário (Top)", subtitle_style))
-                story.append(Spacer(1, 8))
-                top_users = user_counts[:10]
+    # Métrica de usuários (sempre que houver dados), independente de clusters
+    if user_counts:
+        try:
+            story.append(Paragraph("Chamados Abertos por Usuário (Top)", subtitle_style))
+            story.append(Spacer(1, 8))
+            top_users = user_counts[:10]
 
-                table_user = Table([["Usuário", "Chamados"]] + [[u, str(c)] for u, c in top_users], colWidths=[300, 90])
-                table_user.setStyle(
-                    TableStyle([
-                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2F4F4F")),
-                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
-                        ("BOX", (0, 0), (-1, -1), 0.25, colors.lightgrey),
-                        ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
-                    ])
-                )
-                story.extend([table_user, Spacer(1, 14)])
+            table_user = Table([["Usuário", "Chamados"]] + [[u, str(c)] for u, c in top_users], colWidths=[300, 90])
+            table_user.setStyle(
+                TableStyle([
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2F4F4F")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
+                    ("BOX", (0, 0), (-1, -1), 0.25, colors.lightgrey),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
+                ])
+            )
+            story.extend([table_user, Spacer(1, 14)])
 
-                figu, axu = plt.subplots(figsize=(7.5, 3.5))
-                sns.barplot(x=[c for _, c in top_users], y=[u for u, _ in top_users], palette="Purples", ax=axu)
-                axu.set_title("Top Usuários por Chamados Abertos")
-                axu.set_xlabel("Chamados")
-                axu.set_ylabel("Usuário")
-                plt.tight_layout()
-                bufu = BytesIO()
-                figu.savefig(bufu, format="png", dpi=150, bbox_inches="tight")
-                plt.close(figu)
-                bufu.seek(0)
-                story.append(Image(bufu, width=480, height=220))
-                story.append(Spacer(1, 18))
-            except Exception:
-                pass
+            figu, axu = plt.subplots(figsize=(7.5, 3.5))
+            sns.barplot(x=[c for _, c in top_users], y=[u for u, _ in top_users], palette="Purples", ax=axu)
+            axu.set_title("Top Usuários por Chamados Abertos")
+            axu.set_xlabel("Chamados")
+            axu.set_ylabel("Usuário")
+            plt.tight_layout()
+            bufu = BytesIO()
+            figu.savefig(bufu, format="png", dpi=150, bbox_inches="tight")
+            plt.close(figu)
+            bufu.seek(0)
+            story.append(Image(bufu, width=480, height=220))
+            story.append(Spacer(1, 18))
+        except Exception:
+            pass
 
-        # Série temporal: Chamados abertos por dia (linha)
-        if daily_counts:
-            try:
-                days = [d for d, _ in daily_counts]
-                vals = [v for _, v in daily_counts]
-                xs = list(range(len(days)))
-                figd, axd = plt.subplots(figsize=(7.5, 3.0))
-                axd.plot(xs, vals, marker="o", color="#1f77b4")
-                axd.set_title("Chamados Abertos por Dia (Janela)")
-                axd.set_xlabel("Data")
-                axd.set_ylabel("Chamados")
-                axd.grid(True, alpha=0.3)
-                # Ticks dinâmicos: no máximo ~6 rótulos distribuídos
-                max_ticks = 6
-                if len(xs) <= max_ticks:
-                    tick_idx = xs
-                else:
-                    step = max(1, math.ceil(len(xs) / max_ticks))
-                    tick_idx = list(range(0, len(xs), step))
-                    if tick_idx[-1] != len(xs) - 1:
-                        tick_idx.append(len(xs) - 1)
-                axd.set_xticks(tick_idx)
-                axd.set_xticklabels([days[i] for i in tick_idx], rotation=45, ha="right")
-                plt.tight_layout()
-                bufd = BytesIO()
-                figd.savefig(bufd, format="png", dpi=150, bbox_inches="tight")
-                plt.close(figd)
-                bufd.seek(0)
-                story.append(Image(bufd, width=480, height=200))
-                story.append(Spacer(1, 18))
-            except Exception:
-                pass
+    # Série temporal: Chamados abertos por dia (linha) — sempre que houver dados
+    if daily_counts:
+        try:
+            days = [d for d, _ in daily_counts]
+            vals = [v for _, v in daily_counts]
+            xs = list(range(len(days)))
+            figd, axd = plt.subplots(figsize=(7.5, 3.0))
+            axd.plot(xs, vals, marker="o", color="#1f77b4")
+            axd.set_title("Chamados Abertos por Dia (Janela)")
+            axd.set_xlabel("Data")
+            axd.set_ylabel("Chamados")
+            axd.grid(True, alpha=0.3)
+            # Ticks dinâmicos: no máximo ~6 rótulos distribuídos
+            max_ticks = 6
+            if len(xs) <= max_ticks:
+                tick_idx = xs
+            else:
+                step = max(1, math.ceil(len(xs) / max_ticks))
+                tick_idx = list(range(0, len(xs), step))
+                if tick_idx[-1] != len(xs) - 1:
+                    tick_idx.append(len(xs) - 1)
+            axd.set_xticks(tick_idx)
+            axd.set_xticklabels([days[i] for i in tick_idx], rotation=45, ha="right")
+            plt.tight_layout()
+            bufd = BytesIO()
+            figd.savefig(bufd, format="png", dpi=150, bbox_inches="tight")
+            plt.close(figd)
+            bufd.seek(0)
+            story.append(Image(bufd, width=480, height=200))
+            story.append(Spacer(1, 18))
+        except Exception:
+            pass
 
         # (Removido) Distribuição de tamanhos dos clusters — mantemos apenas a visualização mais acionável
 
-        for entry in entries:
-            story.append(Paragraph(entry.group_name, styles["Heading3"]))
-            story.append(Paragraph(f"Chamado representativo: {entry.representative_summary}", normal_style))
+    for entry in entries:
+        story.append(Paragraph(entry.group_name, styles["Heading3"]))
+        story.append(Paragraph(f"Chamado representativo: {entry.representative_summary}", normal_style))
 
-            if entry.sample_summaries:
-                story.append(Spacer(1, 6))
-                story.append(Paragraph("Exemplos adicionais:", normal_style))
-                story.append(
-                    ListFlowable(
-                        [
-                            ListItem(Paragraph(sample, normal_style), leftIndent=12)
-                            for sample in entry.sample_summaries
-                        ],
-                        bulletType="bullet",
-                        leftIndent=0,
-                    )
+        if entry.sample_summaries:
+            story.append(Spacer(1, 6))
+            story.append(Paragraph("Exemplos adicionais:", normal_style))
+            story.append(
+                ListFlowable(
+                    [
+                        ListItem(Paragraph(sample, normal_style), leftIndent=12)
+                        for sample in entry.sample_summaries
+                    ],
+                    bulletType="bullet",
+                    leftIndent=0,
                 )
-            else:
-                story.append(Spacer(1, 6))
-                story.append(Paragraph("Nenhum outro exemplo disponível.", italic_style))
+            )
+        else:
+            story.append(Spacer(1, 6))
+            story.append(Paragraph("Nenhum outro exemplo disponível.", italic_style))
 
-            story.append(Spacer(1, 12))
+        story.append(Spacer(1, 12))
 
     doc.build(story)
     pdf_bytes = buffer.getvalue()
