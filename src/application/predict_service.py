@@ -11,6 +11,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import seaborn as sns
 
 # PDF
@@ -159,19 +160,35 @@ def _build_forecast_plots(history: pd.DataFrame, fit_hist: pd.DataFrame, future:
     hist = history.copy()
     hist = hist.sort_values("ds").reset_index(drop=True)
     hist["trend"] = hist["y"].rolling(window=7, min_periods=1).mean()
-    fig2, (ax21, ax22) = plt.subplots(1, 2, figsize=(12, 4))
+    fig2, (ax21, ax22, ax23) = plt.subplots(1, 3, figsize=(16, 4))
     ax21.plot(hist["ds"], hist["trend"], color="#2ca02c")
     ax21.set_title("Tendência (MM7)")
     ax21.set_xlabel("Data")
     ax21.set_ylabel("Chamados")
     ax21.grid(True, alpha=0.3)
+    # Ticks de data mais limpos
+    locator = mdates.AutoDateLocator(minticks=4, maxticks=8)
+    formatter = mdates.ConciseDateFormatter(locator)
+    ax21.xaxis.set_major_locator(locator)
+    ax21.xaxis.set_major_formatter(formatter)
 
     hist["weekday"] = hist["ds"].dt.weekday
-    weekly = hist.groupby("weekday")["y"].mean().reindex(range(7))
+    weekly = hist.groupby("weekday")["y"].mean().reindex(range(7)).fillna(0.0)
     ax22.bar(["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"], weekly.values, color="#9467bd")
     ax22.set_title("Sazonalidade semanal (média)")
     ax22.set_ylabel("Chamados")
     ax22.grid(axis="y", alpha=0.2)
+
+    # Padrão anual (média por mês)
+    hist["month"] = hist["ds"].dt.month
+    yearly = hist.groupby("month")["y"].mean().reindex(range(1, 13)).fillna(0.0)
+    month_labels = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
+    ax23.plot(range(1, 13), yearly.values, marker="o", color="#ff7f0e")
+    ax23.set_xticks(range(1, 13))
+    ax23.set_xticklabels(month_labels)
+    ax23.set_title("Sazonalidade anual (média por mês)")
+    ax23.set_ylabel("Chamados")
+    ax23.grid(True, alpha=0.2)
     plt.tight_layout()
     img2 = _fig_to_image(fig2)
 
@@ -189,7 +206,7 @@ def _build_forecast_plots(history: pd.DataFrame, fit_hist: pd.DataFrame, future:
         comb[comb["tipo"] == "Previsão"]["yhat_upper"],
         color="#1f77b4",
         alpha=0.2,
-        label="IC 90%",
+        label="IC 80%",
     )
     ax3.scatter(last_hist["ds"], last_hist["y"], label="Últimos 10 dias (reais)", color="#000", zorder=5)
     ax3.axvline(last_hist["ds"].max(), color="red", linestyle="--", label="Início da previsão")
