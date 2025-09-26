@@ -84,3 +84,22 @@ class JiraCsvRepository:
         slice_df = df[df.index.astype(str).isin(ids_str)]
         mask = (slice_df["__Criado_date"] >= str(start)) & (slice_df["__Criado_date"] <= str(end))
         return list(slice_df[mask].index.astype(str))
+
+    def compute_total_hours(self, rows: List[Dict[str, Any]]) -> float:
+        """Soma de horas entre 'Criado' e 'Resolvido' para as linhas do cluster.
+
+        - Ignora horas informadas pelo usuário no filtro; a soma é feita com precisão de horas reais no CSV.
+        - Linhas sem 'Resolvido' ou com datas inválidas são ignoradas.
+        """
+        total_hours = 0.0
+        for r in rows:
+            try:
+                created = pd.to_datetime(r.get("Criado"), errors="coerce")
+                resolved = pd.to_datetime(r.get("Resolvido"), errors="coerce")
+                if pd.isna(created) or pd.isna(resolved):
+                    continue
+                delta = resolved - created
+                total_hours += max(delta.total_seconds(), 0) / 3600.0
+            except Exception:
+                continue
+        return total_hours

@@ -43,6 +43,18 @@ def build_summary_report_pdf(report_entries: Iterable[ClusterSummary]) -> bytes:
     if not entries:
         story.append(Paragraph("Nenhum cluster foi encontrado com os parâmetros atuais.", italic_style))
     else:
+        # Métrica agregada: horas gastas com o mesmo tipo (top clusters)
+        try:
+            total_hours_all = sum(e.total_hours for e in entries)
+            story.append(Paragraph("Horas Gastas com o Mesmo Tipo", subtitle_style))
+            story.append(Paragraph(
+                f"Quantificar as horas gastas com este mesmo tipo (janela selecionada): {total_hours_all:,.2f} horas",
+                normal_style,
+            ))
+            story.append(Spacer(1, 12))
+        except Exception:
+            pass
+
         story.append(Paragraph("Resumo dos principais grupos identificados", subtitle_style))
         story.append(Spacer(1, 12))
 
@@ -70,9 +82,9 @@ def build_summary_report_pdf(report_entries: Iterable[ClusterSummary]) -> bytes:
 
         story.extend([table, Spacer(1, 18)])
 
-        # ==========================
-        # Gráfico: Top grupos por ocorrências
-        # ==========================
+    # ==========================
+    # Gráfico: Top grupos por ocorrências
+    # ==========================
         try:
             fig, ax = plt.subplots(figsize=(7.5, 4))  # largura próxima da página A4
             top = entries[:10]
@@ -98,6 +110,70 @@ def build_summary_report_pdf(report_entries: Iterable[ClusterSummary]) -> bytes:
             story.append(Spacer(1, 18))
         except Exception:
             # Se der qualquer erro no gráfico, seguimos apenas com a tabela
+            pass
+
+        # ==========================
+        # Gráfico: Horas gastas (top clusters com horas)
+        # ==========================
+        try:
+            top_hours = sorted(entries, key=lambda e: e.total_hours, reverse=True)[:10]
+            if any(e.total_hours > 0 for e in top_hours):
+                fig3, ax3 = plt.subplots(figsize=(7.5, 4))
+                sns.barplot(
+                    x=[e.total_hours for e in top_hours],
+                    y=[e.group_name for e in top_hours],
+                    palette="Reds",
+                    ax=ax3,
+                )
+                ax3.set_title("Top Grupos por Horas Gastas")
+                ax3.set_xlabel("Horas (soma Criado → Resolvido)")
+                ax3.set_ylabel("Grupo")
+                plt.tight_layout()
+
+                img_buf3 = BytesIO()
+                fig3.savefig(img_buf3, format="png", dpi=150, bbox_inches="tight")
+                plt.close(fig3)
+                img_buf3.seek(0)
+
+                story.append(Paragraph("Visualização: Top Grupos (Horas Gastas)", styles["Heading3"]))
+                story.append(Spacer(1, 6))
+                story.append(Image(img_buf3, width=480, height=256))
+                story.append(Spacer(1, 18))
+        except Exception:
+            pass
+
+        # ==========================
+        # Gráfico: Média de horas por grupo (total_hours / ocorrências)
+        # ==========================
+        try:
+            # Evita divisão por zero; occurrences normalmente >= MIN_CLUSTER_SIZE
+            def _avg(e: ClusterSummary) -> float:
+                return (e.total_hours / e.occurrences) if e.occurrences else 0.0
+
+            top_avg = sorted(entries, key=_avg, reverse=True)[:10]
+            if any(_avg(e) > 0 for e in top_avg):
+                fig4, ax4 = plt.subplots(figsize=(7.5, 4))
+                sns.barplot(
+                    x=[_avg(e) for e in top_avg],
+                    y=[e.group_name for e in top_avg],
+                    palette="Greens",
+                    ax=ax4,
+                )
+                ax4.set_title("Média de Horas por Grupo")
+                ax4.set_xlabel("Média de horas por chamado")
+                ax4.set_ylabel("Grupo")
+                plt.tight_layout()
+
+                img_buf4 = BytesIO()
+                fig4.savefig(img_buf4, format="png", dpi=150, bbox_inches="tight")
+                plt.close(fig4)
+                img_buf4.seek(0)
+
+                story.append(Paragraph("Visualização: Média de Horas por Grupo", styles["Heading3"]))
+                story.append(Spacer(1, 6))
+                story.append(Image(img_buf4, width=480, height=256))
+                story.append(Spacer(1, 18))
+        except Exception:
             pass
 
         # (Removido) Distribuição de tamanhos dos clusters — mantemos apenas a visualização mais acionável

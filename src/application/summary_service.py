@@ -97,14 +97,20 @@ class SummaryReportService:
 
             # Enriquecer com CSV se disponível
             csv_summaries: List[str] = []
+            total_hours: float = 0.0
             if self._jira_repo is not None:
                 try:
                     date_range = (data_inicio, data_fim) if data_inicio and data_fim else None
                     rows = self._jira_repo.get_rows_by_ids(cluster_ids, date_range=date_range)
                     csv_summaries = self._extract_summaries_from_rows(rows, limit=5)
+                    try:
+                        total_hours = self._jira_repo.compute_total_hours(rows)
+                    except Exception:
+                        total_hours = 0.0
                 except Exception:
                     # Não impede a geração do relatório; segue apenas com metadados
                     csv_summaries = []
+                    total_hours = 0.0
 
             # Se o resumo representativo não veio dos metadados, tenta cair para o CSV
             if (not representative_summary) or representative_summary == "Nome não encontrado":
@@ -126,6 +132,7 @@ class SummaryReportService:
                     representative_summary=representative_summary,
                     occurrences=len(cluster_ids),
                     sample_summaries=sample_summaries,
+                    total_hours=total_hours,
                 )
             )
 

@@ -10,3 +10,4 @@ class ClusterSummary:
     representative_summary: str
     occurrences: int
     sample_summaries: List[str]
+    total_hours: float = 0.0
