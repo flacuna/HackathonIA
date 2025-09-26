@@ -5,6 +5,8 @@ from functools import lru_cache
 from pathlib import Path
 
 from application.summary_service import SummaryReportService, SummaryServiceSettings
+from application.estrategico_service import EstrategicoReportService, EstrategicoServiceSettings
+from application.dashboard_service import DashboardReportService, DashboardServiceSettings
 from infraestructure.jira_repository import JiraCsvRepository
 from infraestructure.llm_bedrock import BedrockAnthropicClient
 
@@ -53,5 +55,47 @@ def get_summary_service() -> SummaryReportService:
     return SummaryReportService(settings, jira_repo=jira_repo, bedrock_client=bedrock)
 
 
+@lru_cache
+def get_estrategico_settings() -> EstrategicoServiceSettings:
+    project_root = Path(__file__).resolve().parent.parent
+    default_csv_path = project_root / "data" / "JIRA_limpo.csv"
+    
+    return EstrategicoServiceSettings(
+        csv_path=os.getenv("JIRA_CSV_PATH", str(default_csv_path))
+    )
+
+
+@lru_cache
+def get_estrategico_service() -> EstrategicoReportService:
+    settings = get_estrategico_settings()
+    jira_repo = JiraCsvRepository()
+    return EstrategicoReportService(settings, jira_repo=jira_repo)
+
+
+@lru_cache
+def get_dashboard_settings() -> DashboardServiceSettings:
+    project_root = Path(__file__).resolve().parent.parent
+    default_csv_path = project_root / "data" / "JIRA_limpo.csv"
+    
+    return DashboardServiceSettings(
+        csv_path=os.getenv("JIRA_CSV_PATH", str(default_csv_path))
+    )
+
+
+@lru_cache
+def get_dashboard_service() -> DashboardReportService:
+    settings = get_dashboard_settings()
+    jira_repo = JiraCsvRepository()
+    return DashboardReportService(settings, jira_repo=jira_repo)
+
+
 def get_summary_service_dependency() -> SummaryReportService:
     return get_summary_service()
+
+
+def get_estrategico_service_dependency() -> EstrategicoReportService:
+    return get_estrategico_service()
+
+
+def get_dashboard_service_dependency() -> DashboardReportService:
+    return get_dashboard_service()
