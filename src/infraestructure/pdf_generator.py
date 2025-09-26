@@ -25,11 +25,13 @@ matplotlib.use("Agg")  # backend não-interativo para servidores
 import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.patheffects as pe
+import math
 
 
 def build_summary_report_pdf(
     report_entries: Iterable[ClusterSummary],
     user_open_counts: Iterable[tuple[str, int]] | None = None,
+    daily_open_counts: Iterable[tuple[str, int]] | None = None,
 ) -> bytes:
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
@@ -44,6 +46,7 @@ def build_summary_report_pdf(
 
     entries: List[ClusterSummary] = list(report_entries)
     user_counts: List[tuple[str, int]] = list(user_open_counts or [])
+    daily_counts: List[tuple[str, int]] = list(daily_open_counts or [])
 
     def _annotate_horizontal_bars(ax, labels: List[str], values: List[float]) -> None:
         """Escreve o nome dos grupos dentro da barra; se não couber, escreve ao lado.
@@ -260,6 +263,39 @@ def build_summary_report_pdf(
                 plt.close(figu)
                 bufu.seek(0)
                 story.append(Image(bufu, width=480, height=220))
+                story.append(Spacer(1, 18))
+            except Exception:
+                pass
+
+        # Série temporal: Chamados abertos por dia (linha)
+        if daily_counts:
+            try:
+                days = [d for d, _ in daily_counts]
+                vals = [v for _, v in daily_counts]
+                xs = list(range(len(days)))
+                figd, axd = plt.subplots(figsize=(7.5, 3.0))
+                axd.plot(xs, vals, marker="o", color="#1f77b4")
+                axd.set_title("Chamados Abertos por Dia (Janela)")
+                axd.set_xlabel("Data")
+                axd.set_ylabel("Chamados")
+                axd.grid(True, alpha=0.3)
+                # Ticks dinâmicos: no máximo ~6 rótulos distribuídos
+                max_ticks = 6
+                if len(xs) <= max_ticks:
+                    tick_idx = xs
+                else:
+                    step = max(1, math.ceil(len(xs) / max_ticks))
+                    tick_idx = list(range(0, len(xs), step))
+                    if tick_idx[-1] != len(xs) - 1:
+                        tick_idx.append(len(xs) - 1)
+                axd.set_xticks(tick_idx)
+                axd.set_xticklabels([days[i] for i in tick_idx], rotation=45, ha="right")
+                plt.tight_layout()
+                bufd = BytesIO()
+                figd.savefig(bufd, format="png", dpi=150, bbox_inches="tight")
+                plt.close(figd)
+                bufd.seek(0)
+                story.append(Image(bufd, width=480, height=200))
                 story.append(Spacer(1, 18))
             except Exception:
                 pass

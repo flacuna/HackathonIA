@@ -31,10 +31,14 @@ async def get_summary_report(
             except ValueError:
                 raise HTTPException(status_code=400, detail="Datas devem estar no formato YYYY-MM-DD")
 
-        report_entries, user_open_counts = service.generate_cluster_report(
+        report_entries, user_open_counts, daily_open_counts = service.generate_cluster_report(
             data_inicio=data_inicio, data_fim=data_fim
         )
-        pdf_bytes = build_summary_report_pdf(report_entries, user_open_counts=user_open_counts)
+        pdf_bytes = build_summary_report_pdf(
+            report_entries,
+            user_open_counts=user_open_counts,
+            daily_open_counts=daily_open_counts,
+        )
     except Exception as exc:  # noqa: BLE001 - queremos registrar qualquer falha inesperada
         logger.exception("Falha ao gerar o relatório de resumo", exc_info=exc)
         raise HTTPException(status_code=500, detail="Erro ao gerar o relatório") from exc

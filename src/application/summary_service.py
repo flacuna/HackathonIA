@@ -43,12 +43,12 @@ class SummaryReportService:
 
     def generate_cluster_report(
         self, data_inicio: Optional[str] = None, data_fim: Optional[str] = None
-    ) -> Tuple[List[ClusterSummary], List[Tuple[str, int]]]:
+    ) -> Tuple[List[ClusterSummary], List[Tuple[str, int]], List[Tuple[str, int]]]:
         all_items = self._collection.get(include=["embeddings", "metadatas"])  # ids vem por padrão
         all_ids: Sequence[str] = all_items.get("ids", [])
 
         if not all_ids:
-            return [], []
+            return [], [], []
 
         embeddings = all_items.get("embeddings", [])
         embeddings_map = {item_id: embedding for item_id, embedding in zip(all_ids, embeddings)}
@@ -65,6 +65,7 @@ class SummaryReportService:
 
         # Estatística por usuário (Criador) respeitando a janela
         user_open_counts: List[Tuple[str, int]] = []
+        daily_open_counts: List[Tuple[str, int]] = []
         if self._jira_repo is not None:
             try:
                 date_range = (data_inicio, data_fim) if data_inicio and data_fim else None
@@ -75,8 +76,25 @@ class SummaryReportService:
                     if isinstance(creator, str) and creator.strip():
                         counter[creator.strip()] += 1
                 user_open_counts = sorted(counter.items(), key=lambda kv: kv[1], reverse=True)
+
+                # Contagem diária de aberturas (com base em '__Criado_date' quando disponível)
+                day_counter = Counter()
+                for row in rows_all:
+                    day = row.get("__Criado_date")
+                    if not day:
+                        # fallback: parse de 'Criado' e extrai a data
+                        val = row.get("Criado")
+                        if isinstance(val, str) and val:
+                            try:
+                                day = str(val[:10])
+                            except Exception:
+                                day = None
+                    if isinstance(day, str) and day:
+                        day_counter[day] += 1
+                daily_open_counts = sorted(day_counter.items(), key=lambda kv: kv[0])
             except Exception:
                 user_open_counts = []
+                daily_open_counts = []
 
         clusters: List[List[str]] = []
         unclustered_ids = set(all_ids)
@@ -154,7 +172,7 @@ class SummaryReportService:
                 )
             )
 
-        return report_entries, user_open_counts
+        return report_entries, user_open_counts, daily_open_counts
 
     @staticmethod
     def _extract_summary(metadatas: Iterable[dict]) -> str:
