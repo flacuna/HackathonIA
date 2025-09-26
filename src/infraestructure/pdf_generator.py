@@ -205,10 +205,10 @@ def build_summary_report_pdf(
         # Horas totais após o resumo de grupos
         try:
             total_hours_all = sum(e.total_hours for e in entries)
-            story.append(Paragraph("Horas Gastas com o Mesmo Tipo", subtitle_style))
+            story.append(Paragraph("Tempo total de chamados com o Mesmo Tipo", subtitle_style))
             story.append(Spacer(1, 6))
             story.append(Paragraph(
-                f"Quantificar as horas gastas com este mesmo tipo (janela selecionada): {total_hours_all:,.2f} horas",
+                f"Quantificar o tempo total em aberto deste mesmo tipo (janela selecionada): {total_hours_all:,.2f} horas",
                 normal_style,
             ))
             story.append(Spacer(1, 12))
@@ -226,7 +226,7 @@ def build_summary_report_pdf(
                     palette="Reds",
                     ax=ax3,
                 )
-                ax3.set_title("Top Grupos por Horas Gastas")
+                ax3.set_title("Top Grupos por Horas em Aberto")
                 ax3.set_xlabel("Horas (soma Criado → Resolvido)")
                 ax3.set_ylabel("Grupo")
                 _annotate_horizontal_bars(ax3, [e.representative_summary for e in top_hours], [float(e.total_hours) for e in top_hours])
@@ -237,7 +237,7 @@ def build_summary_report_pdf(
                 plt.close(fig3)
                 img_buf3.seek(0)
 
-                story.append(Paragraph("Visualização: Top Grupos (Horas Gastas)", styles["Heading3"]))
+                story.append(Paragraph("Visualização: Top Grupos (Horas em Aberto)", styles["Heading3"]))
                 story.append(Spacer(1, 6))
                 story.append(Image(img_buf3, width=480, height=256))
                 story.append(Spacer(1, 18))
