@@ -282,7 +282,7 @@ def build_summary_report_pdf(
             counts = [c for _, c in top_users]
             figu, axu = plt.subplots(figsize=(7.5, 3.5))
             sns.barplot(x=counts, y=users, palette="Purples", ax=axu)
-            axu.set_title("Top Usuários por Chamados")
+            axu.set_title("Usuários que mais Abriram Chamados")
             axu.set_xlabel("Chamados")
             axu.set_ylabel("")
             # Remover rótulos verticais (nomes no eixo Y)
