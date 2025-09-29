@@ -21,3 +21,4 @@ src/chroma_db/
 lab/chroma_db/
 # CSVs grandes (opcional, remova se quiser versionar)
 src/data/*.csv
+bkp/
