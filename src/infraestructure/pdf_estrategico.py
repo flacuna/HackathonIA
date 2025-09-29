@@ -221,6 +221,32 @@ def build_relatorio_estrategico_pdf(caminho_csv: str) -> bytes:
         except Exception:
             pass
 
+    # Gráfico: Distribuição de tipos de itens (pizza)
+    if dados:
+        try:
+            tipos_counter = Counter(linha['Tipo de item'] for linha in dados)
+            tipos = list(tipos_counter.keys())
+            valores = list(tipos_counter.values())
+            
+            fig5, ax5 = plt.subplots(figsize=(7.5, 4))
+            colors_pie = plt.cm.Set3(range(len(tipos)))
+            wedges, texts, autotexts = ax5.pie(valores, labels=tipos, autopct='%1.1f%%', 
+                                              colors=colors_pie, startangle=90)
+            ax5.set_title("Distribuição de Tipos de Itens Atendidos")
+            
+            # Melhorar legibilidade das etiquetas
+            for autotext in autotexts:
+                autotext.set_color('white')
+                autotext.set_fontweight('bold')
+            
+            plt.tight_layout()
+
+            img5 = _fig_to_rl_image(fig5, target_width=col_width, max_height=260)
+            cell = KeepInFrame(col_width, 280, [Paragraph("Tipos de Itens", styles["Heading3"]), Spacer(1, 4), img5], mode="shrink")
+            dashboard_cells.append(cell)
+        except Exception:
+            pass
+
     # Renderização do dashboard em tabela 2-colunas
     if dashboard_cells:
         story.append(Paragraph("Dashboard de Indicadores", subtitle_style))
@@ -298,8 +324,8 @@ def build_relatorio_estrategico_pdf(caminho_csv: str) -> bytes:
     story.append(
         ListFlowable(
             [ListItem(Paragraph(rec, normal_style), leftIndent=12) for rec in recomendacoes],
-            bulletType="bullet",
-            leftIndent=0,
+            bulletType="bullet"#,
+            # leftIndent=0,
         )
     )
 
@@ -307,17 +333,3 @@ def build_relatorio_estrategico_pdf(caminho_csv: str) -> bytes:
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
-
-
-if __name__ == "__main__":
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    arquivo_csv = os.path.join(script_dir, "..", "data", "JIRA_limpo.csv")
-    
-    conteudo_relatorio = build_relatorio_estrategico_pdf(arquivo_csv)
-    
-    # Guardar el PDF en el directorio raíz del proyecto
-    pdf_path = os.path.join(script_dir, "..", "..", "relatorio_estrategico.pdf")
-    with open(pdf_path, "wb") as f:
-        f.write(conteudo_relatorio)
-    
-    print(f"Relatório estratégico gerado: {pdf_path}")
