@@ -101,7 +101,9 @@ class BedrockAnthropicClient:
             ],
             "system": (
                 "Você é um assistente especialista em operações de TI. Responda SEMPRE em português do Brasil. "
-                "Produza um resumo objetivo e prático para liderança técnica e suporte."
+                "Produza um resumo objetivo e prático para liderança técnica e suporte. "
+                "Nunca cite nomes de pessoas/usuários; quando necessário, utilize apenas identificadores anônimos "
+                "como 'Usuário #1', 'Usuário #2' etc."
             ),
         }
 
@@ -236,18 +238,20 @@ class BedrockAnthropicClient:
             return "\n".join(lines) if lines else "(sem dados)"
 
         return (
-            "Gere um RESUMO EXECUTIVO ESTRUTURADO em JSON sobre os tickets de suporte no período informado."\
-            "\nRegras:"\
-            "\n- Idioma: PT-BR."\
-            "\n- Seja objetivo (3-6 frases no resumo)."\
-            "\n- Traga insights sobre volume, possíveis causas e impactos."\
-            "\n- Liste 3 a 6 sugestões práticas de mitigação/prevenção (ações concretas)."\
-            "\n- Respeite o intervalo de datas informado ao comentar tendências."\
-            "\n- Responda ESTRITAMENTE no esquema JSON com as chaves: periodo, resumo_geral, sugestoes."\
-            f"\n\nPeríodo analisado: {periodo}"\
-            f"\n\nTop grupos (até 10):\n{_fmt_clusters()}"\
-            f"\n\nChamados por usuário (top 10):\n{_fmt_users()}"\
-            f"\n\nChamados por dia (série):\n{_fmt_daily()}"\
+            "Gere um RESUMO EXECUTIVO ESTRUTURADO em JSON sobre os tickets de suporte no período informado."
+            "\nRegras:"
+            "\n- Idioma: PT-BR."
+            "\n- Seja objetivo (3-6 frases no resumo)."
+            "\n- Traga insights sobre volume, possíveis causas e impactos."
+            "\n- Liste 3 a 6 sugestões práticas de mitigação/prevenção (ações concretas)."
+            "\n- Respeite o intervalo de datas informado ao comentar tendências."
+            "\n- NÃO cite nomes de pessoas/usuários; se necessário referir-se a indivíduos, use identificadores anônimos "
+            "como 'Usuário #1', 'Usuário #2' etc."
+            "\n- Responda ESTRITAMENTE no esquema JSON com as chaves: periodo, resumo_geral, sugestoes."
+            f"\n\nPeríodo analisado: {periodo}"
+            f"\n\nTop grupos (até 10):\n{_fmt_clusters()}"
+            f"\n\nChamados por usuário (top 10):\n{_fmt_users()}"
+            f"\n\nChamados por dia (série):\n{_fmt_daily()}"
         )
 
     @staticmethod

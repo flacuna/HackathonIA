@@ -84,6 +84,18 @@ class SummaryReportService:
                         counter[creator.strip()] += 1
                 user_open_counts = sorted(counter.items(), key=lambda kv: kv[1], reverse=True)
 
+                # >>> ADIÇÃO: Ofuscação de nomes de usuários (pseudonimização para o relatório)
+                alias_map: Dict[str, str] = {}
+                masked_counts: List[Tuple[str, int]] = []
+                seq = 1
+                for real_name, count in user_open_counts:
+                    key = real_name.strip()
+                    if key not in alias_map:
+                        alias_map[key] = f"Usuário #{seq}"
+                        seq += 1
+                    masked_counts.append((alias_map[key], count))
+                user_open_counts = masked_counts
+
                 # Contagem diária de aberturas (com base em '__Criado_date' quando disponível)
                 day_counter = Counter()
                 for row in rows_all:
