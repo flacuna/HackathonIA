@@ -9,10 +9,10 @@ from application.estrategico_service import EstrategicoReportService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["estrategico"])
+router = APIRouter(tags=["strategic"])
 
 
-@router.get("/estrategico", response_class=Response)
+@router.get("/strategic", response_class=Response)
 async def get_estrategico_report(
     service: EstrategicoReportService = Depends(get_estrategico_service_dependency),
 ) -> Response:
