@@ -24,5 +24,5 @@ async def get_dashboard_report(
         raise HTTPException(status_code=500, detail="Erro ao gerar o dashboard") from exc
 
     response = Response(content=pdf_bytes, media_type="application/pdf")
-    response.headers["Content-Disposition"] = "attachment; filename=dashboard-causas-raizes.pdf"
+    response.headers["Content-Disposition"] = 'inline; filename=\"dashboard-causas-raizes.pdf\"'
     return response

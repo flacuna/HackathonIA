@@ -24,5 +24,5 @@ async def get_estrategico_report(
         raise HTTPException(status_code=500, detail="Erro ao gerar o relatório estratégico") from exc
 
     response = Response(content=pdf_bytes, media_type="application/pdf")
-    response.headers["Content-Disposition"] = "attachment; filename=relatorio-estrategico.pdf"
+    response.headers["Content-Disposition"] = "inline; filename=relatorio-estrategico.pdf"
     return response
