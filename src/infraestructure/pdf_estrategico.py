@@ -55,6 +55,19 @@ def carregar_dados_jira(caminho_csv: str) -> List[Dict]:
     return dados
 
 
+def _ofuscar_nomes_usuarios(user_stats: Dict) -> Dict:
+    """Ofusca nomes de usuários para pseudonimização no relatório"""
+    alias_map = {}
+    masked_stats = {}
+    seq = 1
+    for real_name, stats in user_stats.items():
+        key = real_name.strip()
+        if key not in alias_map:
+            alias_map[key] = f"Usuário #{seq}"
+            seq += 1
+        masked_stats[alias_map[key]] = stats
+    return masked_stats
+
 def analisar_desempenho_usuarios(dados: List[Dict]) -> Dict:
     """Analisa métricas de desempenho por usuário"""
     estatisticas_usuarios = defaultdict(lambda: {
@@ -110,7 +123,9 @@ def build_relatorio_estrategico_pdf(caminho_csv: str) -> bytes:
 
     # Carregar e analisar dados
     dados = carregar_dados_jira(caminho_csv)
-    estatisticas_usuarios = analisar_desempenho_usuarios(dados)
+    estatisticas_usuarios_raw = analisar_desempenho_usuarios(dados)
+    # Aplicar ofuscação de nomes de usuários
+    estatisticas_usuarios = _ofuscar_nomes_usuarios(estatisticas_usuarios_raw)
     
     # Estatísticas gerais
     total_chamados = len(dados)
@@ -324,8 +339,7 @@ def build_relatorio_estrategico_pdf(caminho_csv: str) -> bytes:
     story.append(
         ListFlowable(
             [ListItem(Paragraph(rec, normal_style), leftIndent=12) for rec in recomendacoes],
-            bulletType="bullet"#,
-            # leftIndent=0,
+            bulletType="bullet"
         )
     )
 

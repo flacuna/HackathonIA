@@ -103,6 +103,19 @@ def analisar_causas_raizes(dados: List[Dict]) -> Dict:
     }
 
 
+def _ofuscar_nomes_usuarios(user_counts: List[tuple]) -> List[tuple]:
+    """Ofusca nomes de usuários para pseudonimização no relatório"""
+    alias_map = {}
+    masked_counts = []
+    seq = 1
+    for real_name, count in user_counts:
+        key = real_name.strip()
+        if key not in alias_map:
+            alias_map[key] = f"Usuário #{seq}"
+            seq += 1
+        masked_counts.append((alias_map[key], count))
+    return masked_counts
+
 def calcular_kpis_presidencia(dados: List[Dict]) -> Dict:
     """Calcula KPIs executivos para a presidência"""
     total_chamados = len(dados)
@@ -325,8 +338,7 @@ def build_dashboard_pdf(caminho_csv: str) -> bytes:
     story.append(
         ListFlowable(
             [ListItem(Paragraph(rec, normal_style), leftIndent=12) for rec in recomendacoes],
-            bulletType="bullet",
-            leftIndent=0,
+            bulletType="bullet"
         )
     )
 
